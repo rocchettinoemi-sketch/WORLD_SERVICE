@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WORLD SERVICE</title>
+
+<style>
+body{
+ font-family:'Segoe UI',Tahoma;
+ margin:0;
+ background:
+ linear-gradient(rgba(255,255,255,.93),rgba(255,255,255,.93)),
+ url("https://images.unsplash.com/photo-1503387762-592deb58ef4e");
+ background-size:cover;
+ min-height:100vh;
+}
+header{
+ background:#ffffffdd;
+ padding:10px;
+ text-align:center;
+ box-shadow:0 2px 4px rgba(0,0,0,.1)
+}
+header img{height:60px}
+.card{
+ background:#fff;
+ padding:18px;
+ margin:14px auto;
+ border-radius:14px;
+ width:92%;
+ max-width:430px;
+ box-shadow:0 6px 14px rgba(0,0,0,.12)
+}
+.hidden{display:none}
+button,input,select{
+ width:100%;
+ padding:11px;
+ margin:6px 0;
+ border-radius:8px;
+ border:1px solid #ccc;
+ font-size:15px
+}
+.green{background:#4CAF50;color:#fff}
+.blue{background:#2196F3;color:#fff}
+.gray{background:#9E9E9E;color:#fff}
+.orange{background:#ff9800;color:#fff}
+.red{background:#f44336;color:#fff}
+.purple{background:#3f51b5;color:#fff}
+video{width:100%;border-radius:10px;margin-bottom:8px}
+.sep{margin:20px 0;border-top:1px dashed #ccc}
+.homeBtn{
+ position:fixed;
+ bottom:15px;
+ right:15px;
+ border-radius:50%;
+ padding:14px;
+ background:#4CAF50;
+ color:#fff;
+ border:none;
+ font-size:18px
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<img src="https://worldservice.it/wp-content/uploads/2020/05/logo2_400.png">
+</header>
+
+<div class="card hidden" id="loginCard">
+<h3>Primo accesso</h3>
+<input id="nome" placeholder="Nome">
+<input id="cognome" placeholder="Cognome">
+<button class="green" onclick="salvaUtente()">SALVA</button>
+</div>
+
+<div class="card hidden" id="scanCard">
+<h3>Scansiona QR Targa</h3>
+<video id="preview" playsinline></video>
+<input id="targaManuale" placeholder="Oppure inserisci targa">
+<input id="kmInizio" type="number" placeholder="KM iniziali">
+<button class="blue" onclick="avviaMezzo()">AVVIA MEZZO</button>
+<button class="gray" onclick="apriPresenza()">OGGI NON USO IL MEZZO</button>
+</div>
+
+<div class="card hidden" id="presenzaCard">
+<h3>Presenza</h3>
+<input id="attivita" placeholder="Attività">
+<button class="green" onclick="salvaPresenza('ENTRATA')">ENTRATA</button>
+<button class="orange" onclick="salvaPresenza('INIZIO PAUSA')">INIZIO PAUSA</button>
+<button class="blue" onclick="salvaPresenza('FINE PAUSA')">FINE PAUSA</button>
+<button class="red" onclick="salvaPresenza('USCITA')">USCITA</button>
+</div>
+
+<div class="card hidden" id="menuCard">
+<select id="comune">
+<option value="">Seleziona comune</option>
+<option>VESCOVATO</option>
+<option>BONEMERSE</option>
+</select>
+
+<button id="btnTrasbordo" class="gray" onclick="apriTrasbordo()">TRASBORDO SU MEZZO</button>
+<button id="btnImpianto" class="blue" onclick="apriPartenzaImpianto()">SCARICO IMPIANTO</button>
+
+<div class="sep"></div>
+<button class="purple" onclick="fineServizio()">FINE SERVIZIO</button>
+</div>
+
+<div class="card hidden" id="trasbordoCard">
+<h3>Trasbordo</h3>
+<input id="kmScarico" type="number" placeholder="KM scarico">
+<button class="green" onclick="salvaTrasbordo()">SALVA</button>
+</div>
+
+<div class="card hidden" id="partenzaImpiantoCard">
+<h3>Partenza impianto</h3>
+<input id="kmPartenza" type="number" placeholder="KM partenza">
+<button class="green" onclick="salvaPartenzaImpianto()">SALVA</button>
+</div>
+
+<div class="card hidden" id="uscitaImpiantoCard">
+<h3>Uscita impianto</h3>
+<select id="cer">
+<option>20 01 08 Umido</option>
+<option>20 01 01 Carta</option>
+<option>20 01 02 Vetro</option>
+<option>20 01 39 Plastica</option>
+<option>20 03 01 Indifferenziato</option>
+</select>
+<input id="peso" placeholder="Peso (kg)">
+<input id="kmUscita" type="number" placeholder="KM uscita">
+<input type="file" id="fotoFir">
+<button class="green" onclick="salvaUscitaImpianto()">SALVA</button>
+</div>
+
+<button class="homeBtn" onclick="init()">🏠</button>
+
+<script src="https://unpkg.com/jsqr/dist/jsQR.js"></script>
+
+<script>
+const API_URL="https://script.google.com/macros/s/AKfycbwJdFQZ65khfQzzMQTEKsrk_gWKiR_drQ1Mi85Pp5iSjsJFfFN8JIfwNLnq2Y8Ci5LZ/exec
+";
+
+const loginCard=document.getElementById("loginCard");
+const scanCard=document.getElementById("scanCard");
+const presenzaCard=document.getElementById("presenzaCard");
+const menuCard=document.getElementById("menuCard");
+const trasbordoCard=document.getElementById("trasbordoCard");
+const partenzaImpiantoCard=document.getElementById("partenzaImpiantoCard");
+const uscitaImpiantoCard=document.getElementById("uscitaImpiantoCard");
+const preview=document.getElementById("preview");
+const btnTrasbordo=document.getElementById("btnTrasbordo");
+const btnImpianto=document.getElementById("btnImpianto");
+
+let stream=null;
+let scanInterval=null;
+
+function hideAll(){
+ document.querySelectorAll('.card').forEach(c=>c.classList.add('hidden'));
+ stopScan();
+}
+
+function init(){
+ hideAll();
+
+ let u=JSON.parse(localStorage.getItem("utente"));
+ let m=JSON.parse(localStorage.getItem("mezzo"));
+ let imp=JSON.parse(localStorage.getItem("impianto"));
+
+ if(!u){loginCard.classList.remove("hidden");return;}
+
+ if(imp && imp.aperto){
+   uscitaImpiantoCard.classList.remove("hidden");
+   return;
+ }
+
+ if(m && m.attivo){
+   menuCard.classList.remove("hidden");
+   configuraMenu(m.config);
+   return;
+ }
+
+ scanCard.classList.remove("hidden");
+ startScan();
+}
+
+document.addEventListener("DOMContentLoaded",init);
+
+function salvaUtente(){
+ if(!nome.value||!cognome.value)return alert("Compila i campi");
+ localStorage.setItem("utente",JSON.stringify({nome:nome.value,cognome:cognome.value}));
+ init();
+}
+
+function apriPresenza(){hideAll();presenzaCard.classList.remove("hidden");}
+
+function salvaPresenza(tipo){
+ navigator.geolocation.getCurrentPosition(pos=>{
+  fetch(API_URL,{method:"POST",body:JSON.stringify({
+   sheet:"PRESENZE",
+   row:[new Date().toLocaleString(),tipo,attivita.value,pos.coords.latitude+","+pos.coords.longitude]
+  })});
+  attivita.value="";
+  init();
+ });
+}
+
+function startScan(){
+ navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}})
+ .then(s=>{
+  stream=s;
+  preview.srcObject=s;
+  preview.play();
+ });
+}
+
+function stopScan(){
+ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+}
+
+async function avviaMezzo(){
+ let t=targaManuale.value.trim().toUpperCase();
+ if(!t||!kmInizio.value)return alert("Dati mancanti");
+
+ let res=await fetch(API_URL,{method:"POST",body:JSON.stringify({action:"GET_TARGA",targa:t})});
+ let config=await res.json();
+ if(config.error)return alert("Targa non trovata");
+
+ localStorage.setItem("mezzo",JSON.stringify({targa:t,attivo:true,config:config}));
+ init();
+}
+
+function configuraMenu(cfg){
+ btnTrasbordo.style.display=cfg.trasbordo?"block":"none";
+ btnImpianto.style.display=cfg.impianto?"block":"none";
+}
+
+function apriTrasbordo(){hideAll();trasbordoCard.classList.remove("hidden");}
+
+function salvaTrasbordo(){
+ if(!kmScarico.value)return alert("Inserisci KM");
+ kmScarico.value="";
+ init();
+}
+
+function apriPartenzaImpianto(){hideAll();partenzaImpiantoCard.classList.remove("hidden");}
+
+function salvaPartenzaImpianto(){
+ if(!kmPartenza.value)return alert("Inserisci KM");
+ localStorage.setItem("impianto",JSON.stringify({aperto:true}));
+ kmPartenza.value="";
+ init();
+}
+
+function salvaUscitaImpianto(){
+ if(!kmUscita.value)return alert("Inserisci KM");
+ localStorage.removeItem("impianto");
+ cer.selectedIndex=0;
+ peso.value="";
+ kmUscita.value="";
+ fotoFir.value="";
+ init();
+}
+
+function fineServizio(){
+ if(localStorage.getItem("impianto"))return alert("Chiudi prima impianto");
+ localStorage.removeItem("mezzo");
+ init();
+}
+</script>
+
+</body>
+</html>
