@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WORLD SERVICE</title>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+body{
+ font-family:'Segoe UI',Tahoma;
+ margin:0;
+ background:
+ linear-gradient(rgba(255,255,255,.94),rgba(255,255,255,.94)),
+ url("https://images.unsplash.com/photo-1503387762-592deb58ef4e");
+ background-size:cover;
+ min-height:100vh;
+}
+header{
+ text-align:center;
+ padding:10px;
+ background:#ffffffdd;
+}
+header img{height:50px}
+.card{
+ background:#fff;
+ padding:16px;
+ margin:12px auto;
+ border-radius:12px;
+ width:95%;
+ max-width:420px;
+ box-shadow:0 4px 12px rgba(0,0,0,.12)
+}
+.hidden{display:none}
+button,input,select{
+ width:100%;
+ padding:12px;
+ margin:6px 0;
+ border-radius:8px;
+ border:1px solid #ccc;
+ font-size:16px
+}
+.green{background:#4CAF50;color:#fff}
+.blue{background:#2196F3;color:#fff}
+.gray{background:#9E9E9E;color:#fff}
+.orange{background:#ff9800;color:#fff}
+.red{background:#f44336;color:#fff}
+.purple{background:#3f51b5;color:#fff}
+.sep{margin:15px 0;border-top:1px dashed #ccc}
+#reader{width:100%;border-radius:10px}
+.homeBtn{
+ position:fixed;
+ bottom:15px;
+ right:15px;
+ width:42px;
+ height:42px;
+ border-radius:50%;
+ border:none;
+ background:#4CAF50;
+ color:#fff;
+ font-size:18px;
+}
+</style>
+</head>
+<body>
+
+<header>
+<img src="https://worldservice.it/wp-content/uploads/2020/05/logo2_400.png">
+</header>
+
+<div class="card hidden" id="loginCard">
+<h3>Primo accesso</h3>
+<input id="nome" placeholder="Nome">
+<input id="cognome" placeholder="Cognome">
+<button class="green" onclick="salvaUtente()">SALVA</button>
+</div>
+
+<div class="card hidden" id="scanCard">
+<h3>Scansiona QR Targa</h3>
+<div id="reader"></div>
+<button class="gray" onclick="apriPresenza()">OGGI NON USO IL MEZZO</button>
+</div>
+
+<div class="card hidden" id="presenzaCard">
+<button class="green" onclick="salvaPresenza('ENTRATA')">ENTRATA</button>
+<button class="orange" onclick="salvaPresenza('INIZIO PAUSA')">INIZIO PAUSA</button>
+<button class="blue" onclick="salvaPresenza('FINE PAUSA')">FINE PAUSA</button>
+<button class="red" onclick="salvaPresenza('USCITA')">USCITA</button>
+</div>
+
+<div class="card hidden" id="menuCard">
+<select id="comune">
+<option value="">Seleziona comune</option>
+<option>VESCOVATO</option>
+<option>BONEMERSE</option>
+</select>
+
+<button class="gray" onclick="apriTrasbordo()">TRASBORDO</button>
+<button class="blue" onclick="apriImpianto()">SCARICO IMPIANTO</button>
+
+<div class="sep"></div>
+
+<button class="orange" onclick="salvaPresenza('INIZIO PAUSA')">⏸ INIZIO PAUSA</button>
+<button class="green" onclick="salvaPresenza('FINE PAUSA')">▶ FINE PAUSA</button>
+
+<div class="sep"></div>
+
+<button class="purple" onclick="fineServizio()">FINE SERVIZIO</button>
+</div>
+
+<div class="card hidden" id="trasbordoCard">
+<input id="kmScarico" type="number" placeholder="KM scarico">
+<button class="green" onclick="salvaTrasbordo()">SALVA</button>
+</div>
+
+<div class="card hidden" id="impiantoCard">
+<select id="cerSelect">
+<option value="">Seleziona CER</option>
+<option value="20.01.08">20.01.08 (Umido)</option>
+<option value="20.01.01">20.01.01 (Carta)</option>
+<option value="20.01.02">20.01.02 (Vetro)</option>
+<option value="20.01.39">20.01.39 (Plastica)</option>
+<option value="20.03.01">20.03.01 (Indifferenziato)</option>
+<option value="20.03.07">20.03.07 (Ingombranti)</option>
+<option value="20.01.38">20.01.38 (Legno)</option>
+<option value="17.01.07">17.01.07 (Inerti)</option>
+<option value="20.02.01">20.02.01 (Vegetale)</option>
+</select>
+<input id="cerManuale" placeholder="Oppure inserisci CER manualmente">
+<input id="peso" placeholder="Peso (kg)">
+<input id="kmImp" type="number" placeholder="KM">
+<input type="file" id="fotoFir" accept="image/*">
+<button class="green" onclick="salvaImpianto()">SALVA</button>
+</div>
+
+<button class="homeBtn" onclick="init()">🏠</button>
+
+<script>
+const API_URL="https://script.google.com/macros/s/AKfycbzMln0VHCXVMekp8voRwa-QOjdRbcmSLGwgAdnXUcEp1FS2MHulWLsDEWizfmvWpXVT/exec";
+let html5Qr;
+let trackingInterval=null;
+
+function hideAll(){document.querySelectorAll('.card').forEach(c=>c.classList.add('hidden'));}
+
+function init(){
+ hideAll();
+ let utente=JSON.parse(localStorage.getItem("utente"));
+ let mezzo=JSON.parse(localStorage.getItem("mezzo"));
+ if(!utente){loginCard.classList.remove("hidden");return;}
+ if(mezzo && mezzo.attivo){menuCard.classList.remove("hidden");startTracking();}
+ else{apriScan();}
+}
+document.addEventListener("DOMContentLoaded",init);
+
+function salvaUtente(){
+ if(!nome.value||!cognome.value)return alert("Compila campi");
+ localStorage.setItem("utente",JSON.stringify({nome:nome.value,cognome:cognome.value}));
+ init();
+}
+
+function apriScan(){
+ hideAll();
+ scanCard.classList.remove("hidden");
+ html5Qr=new Html5Qrcode("reader");
+ Html5Qrcode.getCameras().then(devices=>{
+  if(devices.length){
+   html5Qr.start({facingMode:"environment"},{fps:10,qrbox:250},qrSuccess);
+  }
+ });
+}
+
+function qrSuccess(decodedText){
+ html5Qr.stop();
+ let utente=JSON.parse(localStorage.getItem("utente"));
+ localStorage.setItem("mezzo",JSON.stringify({targa:decodedText,attivo:true}));
+ getPos(pos=>{
+  send({sheet:"PRESENZE",row:[new Date(),utente.nome+" "+utente.cognome,"ENTRATA",pos]});
+  send({sheet:"MEZZI",row:[new Date(),decodedText,utente.nome+" "+utente.cognome,"INIZIO SERVIZIO","",pos]});
+ });
+ startTracking();
+ init();
+}
+
+function startTracking(){
+ if(trackingInterval)return;
+ trackingInterval=setInterval(()=>{
+  let mezzo=JSON.parse(localStorage.getItem("mezzo"));
+  if(!mezzo)return;
+  navigator.geolocation.getCurrentPosition(pos=>{
+   send({sheet:"PERCORSI",row:[new Date(),mezzo.targa,pos.coords.latitude,pos.coords.longitude]});
+  });
+ },60000);
+}
+
+function stopTracking(){clearInterval(trackingInterval);trackingInterval=null;}
+
+function getPos(cb){
+ navigator.geolocation.getCurrentPosition(
+  p=>cb(p.coords.latitude+","+p.coords.longitude),
+  ()=>cb("NO_GPS")
+ );
+}
+
+function send(data){fetch(API_URL,{method:"POST",body:JSON.stringify(data)});}
+
+function apriPresenza(){hideAll();presenzaCard.classList.remove("hidden");}
+
+function salvaPresenza(tipo){
+ let utente=JSON.parse(localStorage.getItem("utente"));
+ getPos(pos=>{
+  send({sheet:"PRESENZE",row:[new Date(),utente.nome+" "+utente.cognome,tipo,pos]});
+  init();
+ });
+}
+
+function apriTrasbordo(){hideAll();trasbordoCard.classList.remove("hidden");}
+
+function salvaTrasbordo(){
+ if(!kmScarico.value)return alert("Inserisci KM");
+ getPos(pos=>{
+  send({sheet:"SCARICHI",row:[new Date(),"TRASBORDO",comune.value,"",kmScarico.value,"","",pos]});
+ });
+ kmScarico.value="";
+ init();
+}
+
+function apriImpianto(){hideAll();impiantoCard.classList.remove("hidden");}
+
+async function salvaImpianto(){
+ if(!kmImp.value)return alert("Inserisci KM");
+ let cerFinale=cerManuale.value?cerManuale.value:cerSelect.value;
+ if(!cerFinale)return alert("Seleziona CER");
+ let file=document.getElementById("fotoFir").files[0];
+ if(!file)return alert("Allega foto FIR");
+ let reader=new FileReader();
+ reader.onloadend=async function(){
+  let base64=reader.result.split(",")[1];
+  let upload=await fetch(API_URL,{method:"POST",body:JSON.stringify({action:"UPLOAD_FOTO",base64:base64,mimeType:file.type,fileName:file.name})});
+  let result=await upload.json();
+  let link=result.url;
+  getPos(pos=>{
+   send({sheet:"SCARICHI",row:[new Date(),"IMPIANTO",comune.value,cerFinale,kmImp.value,peso.value,link,pos]});
+  });
+  cerSelect.selectedIndex=0;
+  cerManuale.value="";
+  peso.value="";
+  kmImp.value="";
+  fotoFir.value="";
+  init();
+ };
+ reader.readAsDataURL(file);
+}
+
+function fineServizio(){
+ let mezzo=JSON.parse(localStorage.getItem("mezzo"));
+ if(!mezzo)return;
+ let kmFinali=prompt("Inserisci KM finali");
+ if(!kmFinali)return alert("KM obbligatori");
+ getPos(pos=>{
+  send({sheet:"MEZZI",row:[new Date(),mezzo.targa,"FINE SERVIZIO",kmFinali,pos]});
+ });
+ stopTracking();
+ localStorage.removeItem("mezzo");
+ init();
+}
+</script>
+</body>
+</html>
